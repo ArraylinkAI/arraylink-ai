@@ -1,0 +1,13 @@
+RewriteEngine On
+
+# Redirect API calls to PHP scripts
+RewriteRule ^api/make-call$ php/make-call.php [L,QSA]
+RewriteRule ^api/voice/incoming$ php/incoming-call.php [L,QSA]
+RewriteRule ^api/voice/process-speech$ php/process-speech.php [L,QSA]
+RewriteRule ^api/voice/timeout$ php/timeout.php [L,QSA]
+RewriteRule ^api/voice/status$ php/call-status.php [L,QSA]
+
+# Handle React Router (SPA) calls - redirect to index.html if not a file/dir
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]

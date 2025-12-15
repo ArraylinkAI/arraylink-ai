@@ -1,0 +1,50 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Build and deploy Node.js app to Azure Web App - sales-agent
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js version
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18.x'
+
+      - name: Install backend dependencies
+        run: npm install
+
+      - name: Verify React app is pre-built
+        run: |
+          echo "Checking for pre-built React app in public/ directory..."
+          ls -la public/ || echo "Warning: public/ directory not found"
+          if [ -f public/index.html ]; then
+            echo "✅ Pre-built React app found in public/"
+          else
+            echo "❌ No pre-built React app found. Creating placeholder..."
+            mkdir -p public
+            echo "<html><body><h1>Voice Agent Backend</h1></body></html>" > public/index.html
+          fi
+
+      - name: Create self-contained deployment zip
+        run: |
+          zip -r deploy.zip . -x "client/*" ".git/*" "*.log" "temp_audio/*" "conversation_history/*"
+
+      - name: 'Deploy to Azure Web App'
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: 'salesagent2'
+          slot-name: 'Production'
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_196A6E3A57CD4DDC9C3CFD845C233AA0 }}
+          package: deploy.zip
+        
