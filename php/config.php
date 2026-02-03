@@ -8,7 +8,8 @@ if (basename($_SERVER['PHP_SELF']) == basename(__FILE__)) {
 }
 
 // Simple .env parser to avoid Composer dependencies
-function loadEnv($path) {
+function loadEnv($path)
+{
     if (!file_exists($path)) {
         return;
     }
@@ -51,5 +52,16 @@ if (!defined('SYSTEM_CONTEXT')) {
     4. ALWAYS ASK for quantities.
     5. Be helpful and professional.
     Keep responses short and conversational.");
+}
+
+// SAP Integration Configuration
+if (!defined('SAP_ENABLED')) {
+    define('SAP_ENABLED', getenv('SAP_ENABLED') === 'true');
+    define('SAP_API_URL', getenv('SAP_API_URL') ?: '');
+    define('SAP_USERNAME', getenv('SAP_USERNAME') ?: '');
+    define('SAP_PASSWORD', getenv('SAP_PASSWORD') ?: '');
+    define('SAP_CLIENT_ID', getenv('SAP_CLIENT_ID') ?: '100');
+    define('SAP_TIMEOUT', (int) (getenv('SAP_TIMEOUT') ?: 10)); // seconds
+    define('SAP_CACHE_TTL', (int) (getenv('SAP_CACHE_TTL') ?: 3600)); // 1 hour default
 }
 ?>

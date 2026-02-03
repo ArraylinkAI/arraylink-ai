@@ -1,55 +1,162 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
-    <meta charset="utf-8" />
-    <link rel="icon" type="image/png" href="/assets/ICON 1-01.png?v=__BUILD_VERSION__" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="theme-color" content="#0ea5e9" />
-    <meta name="description" content="ArrayLink AI - AI-powered voice automation system for businesses" />
-    <link rel="apple-touch-icon" href="/logo192.png?v=__BUILD_VERSION__" />
-    <link rel="manifest" href="/manifest.json?v=__BUILD_VERSION__" />
-    <title>ArrayLink AI - Voice Automation Platform</title>
-    <script defer="defer" src="/static/js/main.c27ba009.js"></script>
-    <link href="/static/css/main.1b772d6e.css" rel="stylesheet">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Voice Agent | Future of Sales</title>
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="./css/style.css">
+    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
 </head>
 
-<body><noscript>You need to enable JavaScript to run this app.</noscript>
-    <style>
-        .more-apps-btn {
-            position: fixed;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 2147483647 !important;
-            pointer-events: auto;
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: white !important;
-            padding: 12px 24px;
-            border-radius: 50px;
-            text-decoration: none;
-            font-family: 'Inter', sans-serif;
-            font-weight: 500;
-            letter-spacing: 0.5px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            cursor: pointer;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+<body>
+    <!-- Background Canvas for Particles -->
+    <canvas id="neural-network-canvas"></canvas>
 
-        .more-apps-btn:hover {
-            transform: translateX(-50%) translateY(-2px);
-            background: rgba(15, 23, 42, 0.95);
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-            border-color: rgba(59, 130, 246, 0.5);
-        }
-    </style>
-    <div id="root"></div>
-    <a href="/portal.html" class="more-apps-btn">More Apps 🚀</a>
+    <!-- Scanline Effect -->
+    <div class="scanlines"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container nav-container">
+            <a href="#" class="logo">
+                <div class="logo-icon">
+                    <span class="material-icons-round">graphic_eq</span>
+                </div>
+                VOICE<span class="text-neon">AGENT</span>.ai
+            </a>
+            <div class="nav-status">
+                <span class="status-dot"></span>
+                SYSTEM ONLINE
+            </div>
+            <a href="portal.html" class="btn btn-cyber">
+                <span class="btn-text">ACCESS PORTAL</span>
+                <span class="btn-glitch">ACCESS PORTAL</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="container hero-grid">
+            <div class="hero-content">
+                <div class="badge-tech">
+                    <span class="material-icons-round">bolt</span>
+                    POWERED BY GPT-4o & SAP
+                </div>
+                <h1 class="glitch-text" data-text="AUTONOMOUS_SALES">
+                    AUTONOMOUS <br>
+                    <span class="text-neon">SALES AGENT</span>
+                </h1>
+                <p class="hero-desc">
+                    Deploy an AI workforce that negotiates, checks inventory, and closes deals in real-time.
+                    Fully integrated with your ERP.
+                </p>
+
+                <div class="ctl-panel">
+                    <div class="stat-box">
+                        <span class="label">VOICE LATENCY</span>
+                        <span class="value text-neon">240ms</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="label">SAP STATUS</span>
+                        <span class="value text-success">CONNECTED</span>
+                    </div>
+                </div>
+
+                <div class="cta-group">
+                    <a href="#" class="btn btn-primary-glow">
+                        START DEMO
+                        <span class="material-icons-round">arrow_forward</span>
+                    </a>
+                    <a href="#features" class="btn btn-glass">
+                        VIEW ARCHITECTURE
+                    </a>
+                </div>
+            </div>
+
+            <!-- AI Visual Core -->
+            <div class="hero-visual">
+                <div class="ai-core-container">
+                    <div class="ai-core">
+                        <div class="core-ring ring-1"></div>
+                        <div class="core-ring ring-2"></div>
+                        <div class="core-ring ring-3"></div>
+                        <div class="core-center">
+                            <span class="material-icons-round">mic</span>
+                        </div>
+                    </div>
+                    <div class="floating-card card-1">
+                        <div class="card-header">
+                            <span class="material-icons-round">inventory_2</span>
+                            <span>INVENTORY CHECK</span>
+                        </div>
+                        <div class="card-body">
+                            Product: <span class="text-neon">Organic Avocados</span><br>
+                            Stock: <span class="text-success">450 Units</span><br>
+                            Warehouse: <span class="text-warning">CA-05</span>
+                        </div>
+                    </div>
+                    <div class="floating-card card-2">
+                        <div class="card-header">
+                            <span class="material-icons-round">shopping_cart</span>
+                            <span>ORDER CREATED</span>
+                        </div>
+                        <div class="card-body">
+                            Order #: <span class="text-neon">SAP-9921</span><br>
+                            Value: <span class="text-success">$1,240.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Features Section -->
+    <section id="features" class="features-section">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">NEURAL CAPABILITIES</h2>
+                <div class="separator-neon"></div>
+            </div>
+
+            <div class="bento-grid">
+                <!-- Card 1 -->
+                <div class="bento-item glow-card">
+                    <div class="item-icon icon-sap">
+                        <span class="material-icons-round">dns</span>
+                    </div>
+                    <h3>SAP Integration</h3>
+                    <p>Direct hook into S/4HANA for real-time inventory and pricing lookup.</p>
+                </div>
+
+                <!-- Card 2 -->
+                <div class="bento-item glow-card">
+                    <div class="item-icon icon-brain">
+                        <span class="material-icons-round">psychology</span>
+                    </div>
+                    <h3>Context Memory</h3>
+                    <p>Remembers past orders and customer preferences for hyper-personalized calls.</p>
+                </div>
+
+                <!-- Card 3 -->
+                <div class="bento-item glow-card">
+                    <div class="item-icon icon-voice">
+                        <span class="material-icons-round">record_voice_over</span>
+                    </div>
+                    <h3>Human-Like Voice</h3>
+                    <p>Sub-second latency with emotional prosody and interruption handling.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Script -->
+    <script src="./js/app.js"></script>
 </body>
 
 </html>
