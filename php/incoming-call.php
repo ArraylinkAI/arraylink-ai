@@ -2,14 +2,65 @@
 // incoming-call.php
 header('Content-Type: text/xml');
 require_once 'config.php';
+require_once 'db.php';
+
+// SAP Integration
+if (SAP_ENABLED) {
+    require_once 'sap_customers.php';
+    require_once 'sap_cache_manager.php';
+    require_once 'sap_error_handler.php';
+}
 
 $callId = $_GET['callId'] ?? 'unknown_' . time();
-$storageFile = __DIR__ . "/storage/call_{$callId}.json";
+$callerPhone = $_POST['From'] ?? null; // Twilio provides caller's phone number
+$pdo = getDbConnection();
+
+// NEW: Lookup customer in SAP
+$customer = null;
+if (SAP_ENABLED && $callerPhone) {
+    try {
+        $customer = getSAPCustomerByPhone($callerPhone);
+        if ($customer) {
+            error_log("SAP: Customer recognized - {$customer['name']} from {$customer['company']}");
+        }
+    } catch (Exception $e) {
+        error_log("SAP Customer Lookup Failed: " . $e->getMessage());
+        // Continue with generic greeting
+    }
+}
+
+// Build personalized context if customer found
+$systemContext = SYSTEM_CONTEXT;
+if ($customer) {
+    $systemContext .= "\n\nCUSTOMER INFORMATION:";
+    $systemContext .= "\n- Name: {$customer['name']}";
+    $systemContext .= "\n- Company: {$customer['company']}";
+    $systemContext .= "\n- Customer ID: {$customer['id']}";
+
+    if (!empty($customer['last_order_date'])) {
+        $systemContext .= "\n- Last Order: {$customer['last_order_date']}";
+    }
+
+    if (!empty($customer['preferred_products'])) {
+        $products = is_array($customer['preferred_products'])
+            ? implode(', ', $customer['preferred_products'])
+            : $customer['preferred_products'];
+        $systemContext .= "\n- Usually Orders: $products";
+    }
+
+    $systemContext .= "\n\nIMPORTANT: Greet this customer PERSONALLY using their name and company name!";
+}
 
 // Initialize conversation
+$userPrompt = $customer
+    ? "The call just connected. Greet {$customer['name']} from {$customer['company']} personally and warmly. " .
+    (!empty($customer['last_order_date']) ? "Mention their last order was on {$customer['last_order_date']}. " : "") .
+    "Ask how you can help them today."
+    : 'The call just connected. Say EXACTLY this greeting and nothing more: "Hi, I am Sarah calling from US Food Supplies, customer sales department. Can I know if I am speaking with the manager?"';
+
 $conversation = [
-    ['role' => 'system', 'content' => SYSTEM_CONTEXT],
-    ['role' => 'user', 'content' => 'The call just connected. Say EXACTLY this greeting and nothing more: "Hi, I am Sarah calling from US Food Supplies, customer sales department. Can I know if I am speaking with the manager [manager name]?" - Replace [manager name] with the actual manager name or just "Manager" if unknown.']
+    ['role' => 'system', 'content' => $systemContext],
+    ['role' => 'user', 'content' => $userPrompt]
 ];
 
 // Call OpenAI for initial greeting
@@ -48,10 +99,31 @@ if ($httpCode === 200) {
     error_log("OpenAI Error in incoming-call: " . $response);
 }
 
-// Save conversation state
-file_put_contents($storageFile, json_encode($conversation));
+// Save to Database (Primary) or File (Fallback)
+if ($pdo) {
+    try {
+        $stmt = $pdo->prepare("
+            INSERT INTO call_logs 
+            (call_sid, sap_customer_id, user_phone, created_at, conversation, status) 
+            VALUES (:sid, :sap_id, :phone, NOW(), :conv, 'ongoing')
+        ");
+        $stmt->execute([
+            ':sid' => $callId,
+            ':sap_id' => $customer ? $customer['id'] : null,
+            ':phone' => $callerPhone,
+            ':conv' => json_encode($conversation)
+        ]);
+    } catch (Exception $e) {
+        error_log("DB Error in incoming-call: " . $e->getMessage());
+        // Fallback to file if DB fails
+        file_put_contents(__DIR__ . "/storage/call_{$callId}.json", json_encode($conversation));
+    }
+} else {
+    // Fallback to file
+    file_put_contents(__DIR__ . "/storage/call_{$callId}.json", json_encode($conversation));
+}
 
-// Clean up text for speech (remove *pause* markers if any, though simple <Say> handles text well)
+// Clean up text for speech
 $speakText = str_replace('*pause*', ' ', $aiResponseText);
 
 // Generate TwiML
