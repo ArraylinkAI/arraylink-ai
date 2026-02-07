@@ -8,6 +8,7 @@
     --bg-panel: rgba(10, 10, 15, 0.6);
     --primary-neon: #00f3ff;
     --secondary-neon: #bc13fe;
+    --accent-soft: #6b7cff;
     --success: #00ff9d;
     --warning: #ffbf00;
     --text-main: #ffffff;
@@ -32,6 +33,16 @@ body {
     color: var(--text-main);
     font-family: var(--font-heading);
     overflow-x: hidden;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(circle at 20% 20%, rgba(0, 243, 255, 0.12), transparent 40%),
+        radial-gradient(circle at 80% 10%, rgba(188, 19, 254, 0.15), transparent 35%),
+        radial-gradient(circle at 80% 80%, rgba(107, 124, 255, 0.18), transparent 45%);
+    z-index: -2;
 }
 
 /* === BACKGROUND === */
@@ -71,6 +82,7 @@ body {
     z-index: 50;
     backdrop-filter: blur(10px);
     border-bottom: var(--border-glass);
+    background: rgba(3, 3, 5, 0.6);
 }
 
 .nav-container {
@@ -292,7 +304,7 @@ h1 {
 .core-center {
     width: 80px;
     height: 80px;
-    background: white;
+    background: linear-gradient(135deg, #ffffff, #b8e9ff);
     border-radius: 50%;
     z-index: 10;
     display: flex;
@@ -377,6 +389,13 @@ h1 {
     animation-delay: 2s;
 }
 
+.card-3 {
+    top: 55%;
+    left: -5%;
+    border-left-color: var(--accent-soft);
+    animation-delay: 1s;
+}
+
 /* === FEATURES === */
 .features-section {
     padding: 5rem 0;
@@ -393,6 +412,14 @@ h1 {
     font-size: 2rem;
     letter-spacing: 5px;
     margin-bottom: 1rem;
+}
+
+.section-subtitle {
+    max-width: 620px;
+    margin: 0 auto 1.5rem;
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1.6;
 }
 
 .separator-neon {
@@ -438,6 +465,69 @@ h1 {
     margin-bottom: 1.5rem;
     color: var(--primary-neon);
     font-size: 2rem;
+}
+
+/* === SIGNAL SECTION === */
+.signal-section {
+    padding: 5rem 0 6rem;
+    background: radial-gradient(circle at 10% 20%, rgba(0, 243, 255, 0.08), transparent 45%),
+        radial-gradient(circle at 80% 60%, rgba(188, 19, 254, 0.08), transparent 40%);
+}
+
+.signal-grid {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 3rem;
+    padding: 0 2rem;
+    align-items: center;
+}
+
+.signal-card {
+    background: rgba(10, 10, 15, 0.7);
+    border: var(--border-glass);
+    padding: 2.5rem;
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+}
+
+.signal-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+}
+
+.signal-header .material-icons-round {
+    color: var(--primary-neon);
+}
+
+.signal-metrics {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.signal-metric {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.signal-metric .label {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.signal-metric .value {
+    font-weight: 700;
+    font-size: 1.1rem;
 }
 
 /* === ANIMATIONS === */
@@ -501,5 +591,14 @@ h1 {
 
     .bento-grid {
         grid-template-columns: 1fr;
+    }
+
+    .signal-grid {
+        grid-template-columns: 1fr;
+        text-align: center;
+    }
+
+    .signal-card {
+        text-align: left;
     }
 }
