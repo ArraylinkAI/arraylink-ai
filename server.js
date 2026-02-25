@@ -15,21 +15,21 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production' 
+    origin: process.env.NODE_ENV === 'production'
       ? [
-          process.env.CLIENT_URL,
-          `https://${process.env.AZURE_WEBAPP_NAME}.azurewebsites.net`,
-          // Allow any Azure subdomain for flexibility
-          /^https:\/\/.*\.\.net$/,
-          // Allow any https domain for testing
-          /^https:\/\/.*/
-        ].filter(Boolean)
+        process.env.CLIENT_URL,
+        `https://${process.env.AZURE_WEBAPP_NAME}.azurewebsites.net`,
+        // Allow any Azure subdomain for flexibility
+        /^https:\/\/.*\.\.net$/,
+        // Allow any https domain for testing
+        /^https:\/\/.*/
+      ].filter(Boolean)
       : [
-          process.env.CLIENT_URL,
-          "http://localhost:3001", 
-          "http://localhost:3002", 
-          "http://localhost:3003"
-        ].filter(Boolean),
+        process.env.CLIENT_URL,
+        "http://localhost:3001",
+        "http://localhost:3002",
+        "http://localhost:3003"
+      ].filter(Boolean),
     methods: ["GET", "POST"],
     allowEIO3: true,
     credentials: true // Enable CORS credentials
@@ -44,17 +44,17 @@ const io = socketIo(server, {
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? [
-        process.env.CLIENT_URL,
-        `https://${process.env.AZURE_WEBAPP_NAME}.azurewebsites.net`,
-        /^https:\/\/.*\.azurewebsites\.net$/,
-        /^https:\/\/.*/
-      ].filter(Boolean)
+      process.env.CLIENT_URL,
+      `https://${process.env.AZURE_WEBAPP_NAME}.azurewebsites.net`,
+      /^https:\/\/.*\.azurewebsites\.net$/,
+      /^https:\/\/.*/
+    ].filter(Boolean)
     : [
-        process.env.CLIENT_URL,
-        "http://localhost:3001",
-        "http://localhost:3002",
-        "http://localhost:3003"
-      ].filter(Boolean),
+      process.env.CLIENT_URL,
+      "http://localhost:3001",
+      "http://localhost:3002",
+      "http://localhost:3003"
+    ].filter(Boolean),
   credentials: true // Enable CORS credentials
 }));
 app.use(bodyParser.json());
@@ -68,10 +68,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from React build
-app.use(express.static(path.join(__dirname, 'public')));
+// Redirect root to the real website (Hostinger)
+// Render.com is the API backend only - not the website frontend
+app.get('/', (req, res) => {
+  res.redirect(301, 'https://arraylink.ai');
+});
 
-// Serve temporary audio files
+// Serve temporary audio files (needed for Azure TTS fallback)
 app.use('/audio', express.static(path.join(__dirname, 'temp_audio')));
 
 // Initialize services
@@ -96,6 +99,7 @@ try {
 // Store for active calls and conversations
 const activeCalls = new Map();
 const conversations = new Map();
+const conversationStates = new Map(); // Track conversation states for interruption handling
 
 // Track timeout attempts to prevent infinite loops
 const callTimeoutAttempts = new Map();
@@ -111,7 +115,7 @@ function initializeSessionFlags(callId) {
     upsellAttempted: false,
     customerDone: false
   });
-  
+
   // Initialize order details
   orderDetails.set(callId, {
     customerName: '',
@@ -119,12 +123,20 @@ function initializeSessionFlags(callId) {
     products: [],
     total: 0
   });
+
+  // Initialize conversation state for interruption handling
+  conversationStates.set(callId, {
+    isAISpeaking: false,
+    lastInterruption: null,
+    waitingForCustomer: true
+  });
 }
 
 // Clean up session flags
 function cleanupSessionFlags(callId) {
   sessionFlags.delete(callId);
   orderDetails.delete(callId); // Clean up order details too
+  conversationStates.delete(callId); // Clean up conversation state
 }
 
 // Create conversation history directory if it doesn't exist
@@ -163,114 +175,69 @@ function addToCache(key, value) {
 }
 
 // Company context for AI agent
-const SYSTEM_CONTEXT = `You are Sarah, a friendly and professional sales representative from US Food Supplies. 
+const SYSTEM_CONTEXT = `You are Sarah, a confident and friendly sales representative from US Hotel Food Supplies. 
 
-ROLE: You are calling hotel managers to remind them about restocking orders and take new orders conversationally. You are calm, friendly, helpful, and never pushy. You should also look for natural opportunities to recommend related or seasonal products, without sounding aggressive or interruptive.
+ROLE: You help hotel managers order food supplies and breakfast items. You are helpful, professional, and conversational. Never apologize unnecessarily or end calls abruptly.
 
-IMPORTANT: We operate in the United States and use the Imperial measurement system. Always use:
-- Ounces (oz) instead of grams (g)
-- Pounds (lbs) instead of kilograms (kg)
-- Fluid ounces (fl oz) instead of milliliters (ml)
-- Gallons instead of liters
-- Inches and feet instead of centimeters and meters
+IMPORTANT: Use Imperial measurements (oz, lbs, fl oz, gallons) - we operate in the United States.
 
 YOUR OBJECTIVES:
-1. Introduce yourself and confirm you're speaking with the manager by name.
-2. Remind them about restocking needs and suggest products based on their order history.
-3. Take orders for breakfast supplies and food service items.
-4. ALWAYS ASK for quantities – never assume amounts.
-5. Suggest minimum order quantities and provide pricing.
-6. Confirm each order item with quantity and pricing.
-7. Ask if they need anything else after each order.
-8. Recommend similar or seasonal products where relevant, but only once per conversation unless customer shows strong interest.
-9. End the call professionally when they're done.
+1. Greet the customer and confirm you're speaking with the manager
+2. Help them order hotel food supplies (bagels, pastries, beverages, etc.)
+3. ALWAYS ask for quantities - never assume amounts
+4. Provide pricing and minimum order suggestions
+5. Confirm each order with quantity and price
+6. Ask if they need anything else
+7. Close professionally when they're done
 
-CONVERSATION MANAGEMENT:
-1. If customer says "same as last time" and reorder hasn't been confirmed:
-   - Ask "Just to confirm — would you like to reorder [last product] again? And how many cases?"
-   - After confirmation, mark reorderConfirmed as true
-2. For upsells:
-   - Only attempt one upsell per short call unless customer shows strong engagement
-   - After first upsell attempt, mark upsellAttempted as true
-3. When customer indicates they're done:
-   - Mark customerDone as true
-   - Avoid triggering reset or additional upsells
-   - Proceed to order summary and closing
-
-IMPORTANT GUIDELINES:
-- NEVER assume quantities – ALWAYS ask "How many cases would you like?" for ANY product mention.
-- Use tone softeners where appropriate:
-  * "No rush, just curious — how many would you like today?"
-  * "What quantity works best for you this time?"
-  * Sprinkle in empathy: "Sounds good!", "That makes sense.", "Appreciate that!"
-- ALWAYS suggest minimum orders and pricing options for EVERY product (suggested or customer-mentioned).
-- When suggesting products, IMMEDIATELY ask for quantity and provide pricing – don't just ask "What do you think?"
-- For every confirmed item, evaluate if a related product upsell is appropriate. Do this naturally and sparingly.
-- Avoid repeated upsells in short calls — wait at least 2–3 product turns before suggesting again.
-- Always confirm orders with customer-specified quantities and prices.
-- Be helpful and professional throughout the call.
-- Don't mention shopping carts, order systems, or technical processes.
-- Focus entirely on the voice conversation, not backend systems.
-- Use one of the exact ending phrases listed above to naturally close calls.
-- ALWAYS use Imperial measurements (oz, lbs, fl oz, gallons, etc.).
+PRODUCTS WE SELL:
+- Bagels (Asiago Cheese, Blueberry, Plain, Everything, Cinnamon Raisin)
+- Pastries and breakfast items
+- Beverages (bottled water, juice, coffee)
+- Dairy products (milk, cream, butter)
+- Condiments and jams
+- Kitchen and food service supplies
 
 PRICING GUIDELINES:
-- Bagels/Pastries: $23–27 per case (minimum 2 cases)
-- Beverages: $18–22 per case (minimum 3 cases)
-- Coffee: $26–30 per case (minimum 2 cases)
-- Dairy products: $20–25 per case (minimum 2 cases)
-- Condiments/Jams: $15–20 per case (minimum 2 cases)
-- Bulk discounts: 5+ cases get $2–3 off per case
+- Bagels/Pastries: $23-27 per case (minimum 2 cases)
+- Beverages: $18-22 per case (minimum 3 cases)
+- Coffee: $26-30 per case (minimum 2 cases)
+- Dairy: $20-25 per case (minimum 2 cases)
+- Condiments: $15-20 per case (minimum 2 cases)
+- Bulk discount: 5+ cases get $2-3 off per case
 
-SAMPLE RESPONSES:
-- Opening: "Hi, I'm Sarah calling from US Food Supplies, customer sales department. Can I know if I am speaking with the manager [manager name]?"
-- After confirmation: "Great! Just wanted to make sure you're stocked up. Looks like your regular order of Asiago Cheese Bagels is due. Would you like to go ahead and reorder the same?"
-- Customer: "I need water" → "Perfect! How many cases of bottled water (16.9 fl oz) would you like? We recommend a minimum of 3 cases at $20 per case."
-- Customer: "5 cases" → "Excellent! I'll add 5 cases of bottled water at $20 per case to your order. Anything else?"
-- Customer: "That's all" → "Wonderful! Your order is all set. Thank you for your time and have a great day!"
+CONVERSATION FLOW:
+1. Opening: "Hi, I'm Sarah from US Hotel Food Supplies. Am I speaking with [manager name]?"
+2. After confirmation: "Great! I wanted to check if you need to restock any supplies. Last time you ordered [product]. Would you like to reorder?"
+3. For new products: "How many cases would you like? We recommend minimum [X] cases at $[Y] per case."
+4. Confirm: "Perfect! I'll add [quantity] cases of [product] at $[price] per case."
+5. Continue: "Anything else you need today?"
+6. Closing: "Wonderful! Your order is all set. Thank you and have a great day!"
 
-EDGE CASE & FALLBACK HANDLING:
-- If customer asks for a discount:
-  * You may offer up to 10% off the total order.
-  * "Thanks for asking! I can offer a 10% discount as a thank you for your continued orders — the final amount will reflect that once confirmed."
-  * If more is requested: "I'm only authorized to offer up to 10%, but I hope that still works for you."
+IMPORTANT RULES:
+- NEVER apologize unless there's a real problem
+- NEVER end the call abruptly
+- ALWAYS ask for quantities before confirming orders
+- Be confident and helpful
+- Keep responses brief (1-2 sentences max)
+- Don't mention technical systems or processes
+- Focus on helping them get what they need
 
-- If customer says "same as last time":
-  * "Just to confirm — would you like to reorder [last product] again? And how many cases this time?"
-  * NOTE: Reordering is the most common case and can be the default fallback for returning customers.
+HANDLING COMMON SITUATIONS:
+- "Same as last time" → "Just to confirm, you'd like to reorder [product]? How many cases?"
+- Customer wants discount → "I can offer up to 10% off your total order today."
+- Product out of stock → "We're temporarily out of that. Would [similar product] work instead?"
+- Customer unclear → "No problem! Last time you ordered [X]. Would you like something similar?"
+- Customer busy → "No rush, take your time. Let me know when you're ready."
 
-- If product is out of stock:
-  * "I'm sorry, we're temporarily out of [product]. Would you like to try our [related product] instead?"
-
-- If customer uses metric units:
-  * "Got it! That's about [converted imperial] — we typically stock items in [imperial size], like 16.9 fl oz bottles or 32 oz jars."
-
-- If customer asks about vegan, gluten-free, or specialty items:
-  * "Thanks for asking! I'll note that and check availability. For now, would you like to continue with your regular items?"
-
-- If customer asks about email/cart/system:
-  * "This is just a quick call to help you reorder what you need. Everything will be confirmed once the order is placed. Shall we continue?"
-
-- If customer asks "why are you calling?":
-  * "Just a quick courtesy call to help you restock your usual items — saves you the trouble of remembering later. Shall we go ahead with your usual?"
-
-- If product is not in catalog:
-  * "Let me check on that. If it's not in our current catalog, I'll recommend a similar item for you."
-
-- If line is noisy or call drops:
-  * "It sounds like we're breaking up — I'll try calling again shortly. Thank you!"
-
-- If customer gives vague or unclear answers:
-  * "Totally understand — just to help, last time you ordered [X]. Would you like to go with something similar today?"
-
-- If customer is interrupted or distracted:
-  * "No problem, take your time. Just let me know when you're ready to continue."
-
-RESET INSTRUCTION (fail-safe):
-- If you're unsure about the current context at any time:
-  * Politely ask: "Would you mind confirming which product you're looking to reorder today?" and resume the reorder flow as normal.
-
-REMEMBER: Always ask for quantities first, suggest minimums and pricing, then confirm with their specified amounts. Never assume how much they want to order. Keep the tone friendly, brief, and focused.`;
+REMEMBER: 
+- Be confident and helpful
+- Ask for quantities
+- Provide pricing
+- Confirm orders
+- Keep it conversational
+- Never apologize unnecessarily
+- Don't cut calls short`;
 
 
 // Function to save conversation history to text file
@@ -279,7 +246,7 @@ function saveConversationHistory(callId, conversation, callData, analysis = null
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `call_${callId}_${timestamp}.txt`;
     const filepath = path.join(conversationHistoryDir, filename);
-    
+
     // Get order details
     const order = orderDetails.get(callId) || {
       customerName: 'Unknown',
@@ -287,7 +254,7 @@ function saveConversationHistory(callId, conversation, callData, analysis = null
       products: [],
       total: 0
     };
-    
+
     // Format conversation for text file
     let content = '';
     content += '='.repeat(80) + '\n';
@@ -299,12 +266,12 @@ function saveConversationHistory(callId, conversation, callData, analysis = null
     content += `Customer Name: ${order.customerName}\n`;
     content += `Hotel Name: ${order.hotelName}\n`;
     content += `Order Total: $${order.total.toFixed(2)}\n`;
-    
+
     if (callData) {
       content += `Phone Number: ${callData.phoneNumber || 'Unknown'}\n`;
       content += `Status: ${callData.status || 'Unknown'}\n`;
     }
-    
+
     // Add order details section
     if (order.products.length > 0) {
       content += '\n' + '='.repeat(80) + '\n';
@@ -318,22 +285,22 @@ function saveConversationHistory(callId, conversation, callData, analysis = null
       });
       content += `TOTAL ORDER VALUE: $${order.total.toFixed(2)}\n\n`;
     }
-    
+
     content += '='.repeat(80) + '\n';
     content += `CONVERSATION TRANSCRIPT\n`;
     content += '='.repeat(80) + '\n\n';
-    
+
     // Add conversation messages
     conversation.forEach((message, index) => {
       if (message.role !== 'system') {
         const speaker = message.role === 'user' ? '👤 CUSTOMER' : '🤖 AI AGENT (Sarah)';
         const timestamp = message.timestamp ? new Date(message.timestamp).toLocaleTimeString() : '';
-        
+
         content += `${speaker}${timestamp ? ` [${timestamp}]` : ''}\n`;
         content += `${message.content}\n\n`;
       }
     });
-    
+
     // Add call analysis if available
     if (analysis) {
       content += '='.repeat(80) + '\n';
@@ -342,7 +309,7 @@ function saveConversationHistory(callId, conversation, callData, analysis = null
       content += `Summary: ${analysis.callSummary}\n`;
       content += `Customer Sentiment: ${analysis.customerSentiment}\n`;
       content += `Satisfaction Score: ${analysis.callMetrics?.satisfaction || 'N/A'}/10\n\n`;
-      
+
       if (analysis.orderDetails && analysis.orderDetails.products.length > 0) {
         content += `ORDER DETAILS:\n`;
         content += `-`.repeat(40) + '\n';
@@ -358,7 +325,7 @@ function saveConversationHistory(callId, conversation, callData, analysis = null
       } else {
         content += `ORDER DETAILS: No order placed\n\n`;
       }
-      
+
       if (analysis.nextSteps && analysis.nextSteps.length > 0) {
         content += `NEXT STEPS:\n`;
         content += `-`.repeat(40) + '\n';
@@ -368,15 +335,15 @@ function saveConversationHistory(callId, conversation, callData, analysis = null
         content += '\n';
       }
     }
-    
+
     content += '='.repeat(80) + '\n';
     content += `END OF CALL HISTORY\n`;
     content += '='.repeat(80) + '\n';
-    
+
     // Write to file
     fs.writeFileSync(filepath, content, 'utf8');
     console.log(`💾 Conversation history saved: ${filename}`);
-    
+
     return filename;
   } catch (error) {
     console.error('❌ Error saving conversation history:', error);
@@ -417,7 +384,7 @@ function resetTimeoutAttempts(callId) {
  */
 async function prewarmServices() {
   console.log('🔥 Prewarming AI and TTS services...');
-  
+
   try {
     // Prewarm GPT with a lightweight prompt
     const gptPrewarm = openai.chat.completions.create({
@@ -430,7 +397,7 @@ async function prewarmServices() {
     });
 
     // Prewarm Azure TTS with a short text
-    const ttsPrewarm = azureIntegration ? 
+    const ttsPrewarm = azureIntegration ?
       azureIntegration.createTTSResponse("Hello, this is Sarah.", {
         rate: '0%',
         pitch: '+5%',
@@ -438,7 +405,7 @@ async function prewarmServices() {
         style: 'conversation'
       }).catch(error => {
         console.log('TTS prewarm non-critical error:', error.message);
-      }) : 
+      }) :
       Promise.resolve();
 
     // Wait for both to complete
@@ -453,13 +420,13 @@ async function prewarmServices() {
 // Socket connection handling
 io.on('connection', (socket) => {
   console.log('🔌 Client connected:', socket.id);
-  
+
   // Test handler to verify socket communication
   socket.on('test', (data) => {
     console.log('🧪 Received test message from client:', data);
     socket.emit('testResponse', { message: 'Server received test', originalData: data });
   });
-  
+
   socket.on('disconnect', (reason) => {
     console.log('❌ Client disconnected:', socket.id, 'Reason:', reason);
   });
@@ -469,20 +436,20 @@ io.on('connection', (socket) => {
 app.post('/api/make-call', async (req, res) => {
   try {
     const { phoneNumber, context } = req.body;
-    
+
     if (!phoneNumber) {
       return res.status(400).json({ error: 'Phone number is required' });
     }
 
     // Create a unique call ID
     const callId = `call_${Date.now()}`;
-    
+
     // Initialize order tracking when call starts
     initializeSessionFlags(callId);
 
     // Use custom context if provided, otherwise use default
     const systemContext = context || SYSTEM_CONTEXT;
-    
+
     // Initialize conversation history with dynamic context
     conversations.set(callId, [
       { role: 'system', content: systemContext }
@@ -555,9 +522,9 @@ app.post('/api/make-call', async (req, res) => {
       message: 'Call initiated...'
     });
 
-    res.json({ 
-      success: true, 
-      callId, 
+    res.json({
+      success: true,
+      callId,
       twilioCallSid: call.sid,
       message: 'Call initiated successfully - Full AI conversation enabled!',
       context: systemContext.substring(0, 200) + '...',
@@ -573,8 +540,8 @@ app.post('/api/make-call', async (req, res) => {
       status: error.status,
       moreInfo: error.moreInfo
     });
-    res.status(500).json({ 
-      error: 'Failed to make call', 
+    res.status(500).json({
+      error: 'Failed to make call',
       details: error.message,
       code: error.code,
       moreInfo: error.moreInfo
@@ -588,7 +555,7 @@ app.post('/api/voice/incoming', async (req, res) => {
   console.log(`🎙️ WEBHOOK: /api/voice/incoming called for callId: ${callId}`);
   console.log(`📋 Request body:`, req.body);
   console.log(`📋 Request query:`, req.query);
-  
+
   const twiml = new twilio.twiml.VoiceResponse();
 
   try {
@@ -610,7 +577,7 @@ app.post('/api/voice/incoming', async (req, res) => {
     });
 
     let aiResponse = completion.choices[0].message.content;
-    
+
     conversation.push({ role: 'assistant', content: aiResponse });
     conversations.set(callId, conversation);
 
@@ -638,19 +605,19 @@ app.post('/api/voice/incoming', async (req, res) => {
     if (azureIntegration) {
       try {
         console.log(`🎙️ USING AZURE TTS: Synthesizing "${aiResponse}" with Luna Neural voice`);
-        
+
         // Process natural pause markers and convert to SSML
         const processedText = aiResponse.replace(/\*pause\*/g, '<break time="0.8s"/>');
-        
+
         const ttsResult = await azureIntegration.createTTSResponse(processedText, {
           rate: '0%',  // Normal speed for clear, confident delivery
           pitch: '+5%', // Slightly higher pitch for confident, brave tone
           volume: 'medium',
           style: 'conversation'
         });
-        
+
         console.log(`✅ AZURE TTS SUCCESS: Generated audio with Luna voice`);
-        
+
         // Extract the audio URL from the Azure TwiML and use it inside the gather
         const azureTwimlStr = ttsResult.twiml?.toString?.();
         const playMatch = azureTwimlStr ? azureTwimlStr.match(/<Play>([^<]+)<\/Play>/) : null;
@@ -660,14 +627,14 @@ app.post('/api/voice/incoming', async (req, res) => {
             url: playMatch[1]
           };
         }
-        
+
         // Schedule cleanup of temp audio file
         if (ttsResult.audioFileName) {
           setTimeout(() => {
             azureIntegration.cleanupTempAudio(ttsResult.audioFileName);
           }, 30000); // Clean up after 30 seconds
         }
-        
+
       } catch (azureError) {
         console.error('❌ AZURE TTS FAILED, falling back to Twilio Alice voice:', azureError);
         console.log(`🔄 USING TWILIO TTS: Falling back to Alice voice for "${aiResponse}"`);
@@ -687,16 +654,26 @@ app.post('/api/voice/incoming', async (req, res) => {
 
     const gatherOptions = {
       input: 'speech',
-      timeout: 10,
-      speechTimeout: 'auto',
+      timeout: 8,  // Time to wait for user to start speaking
+      speechTimeout: 3,  // Wait 3 seconds after speech ends before processing
       speechModel: 'experimental_utterances',
       enhanced: true,
       language: 'en-US',
       action: `/api/voice/process-speech?callId=${callId}`,
       method: 'POST',
-      bargeIn: true,
-      partialResultCallback: `/api/voice/partial-speech?callId=${callId}`
+      bargeIn: true,  // Allows user to interrupt AI speech
+      actionOnEmptyResult: true,  // Trigger action even if no speech detected
+      profanityFilter: false,  // Don't filter words for better accuracy
+      partialResultCallback: `/api/voice/partial-speech?callId=${callId}`,
+      partialResultCallbackMethod: 'POST'
     };
+
+    // Mark AI as speaking
+    const state = conversationStates.get(callId);
+    if (state) {
+      state.isAISpeaking = true;
+      state.waitingForCustomer = false;
+    }
 
     const gather = twiml.gather(gatherOptions);
     if (speechSource.type === 'play' && speechSource.url) {
@@ -707,7 +684,7 @@ app.post('/api/voice/incoming', async (req, res) => {
         language: 'en-US'
       }, speechSource.text);
     }
-    
+
     // Handle timeout scenario
     twiml.redirect(`/api/voice/timeout?callId=${callId}`);
 
@@ -725,14 +702,14 @@ app.post('/api/voice/incoming', async (req, res) => {
 app.post('/api/voice/timeout', async (req, res) => {
   const callId = req.query.callId;
   const attemptCount = incrementTimeoutAttempts(callId);
-  
+
   console.log(`⏰ TIMEOUT for callId ${callId}: Attempt ${attemptCount}/3`);
-  
+
   const twiml = new twilio.twiml.VoiceResponse();
-  
+
   try {
     let promptMessage;
-    
+
     if (attemptCount === 1) {
       promptMessage = "Hello? *pause* Are you still there?";
     } else if (attemptCount === 2) {
@@ -740,7 +717,7 @@ app.post('/api/voice/timeout', async (req, res) => {
     } else {
       // Third attempt - give closing message and end call
       promptMessage = "I'll try reaching you another time. *pause* Please feel free to call us back when convenient. Have a great day!";
-      
+
       // Generate final message with Azure TTS
       if (azureIntegration) {
         try {
@@ -751,7 +728,7 @@ app.post('/api/voice/timeout', async (req, res) => {
             volume: 'medium',
             style: 'conversation'
           });
-          
+
           if (ttsResult && ttsResult.twiml) {
             const azureTwimlStr = ttsResult.twiml.toString();
             const playMatch = azureTwimlStr.match(/<Play>([^<]+)<\/Play>/);
@@ -770,19 +747,19 @@ app.post('/api/voice/timeout', async (req, res) => {
       } else {
         twiml.say(promptMessage.replace(/\*pause\*/g, ''));
       }
-      
+
       twiml.hangup();
-      
+
       // Clean up
       resetTimeoutAttempts(callId);
       conversations.delete(callId);
       activeCalls.delete(callId);
-      
+
       res.type('text/xml');
       res.send(twiml.toString());
       return;
     }
-    
+
     // For attempts 1 and 2, use Azure TTS and continue listening
     if (azureIntegration) {
       try {
@@ -793,7 +770,7 @@ app.post('/api/voice/timeout', async (req, res) => {
           volume: 'medium',
           style: 'conversation'
         });
-        
+
         if (ttsResult && ttsResult.twiml) {
           const azureTwimlStr = ttsResult.twiml.toString();
           const playMatch = azureTwimlStr.match(/<Play>([^<]+)<\/Play>/);
@@ -812,29 +789,31 @@ app.post('/api/voice/timeout', async (req, res) => {
     } else {
       twiml.say(promptMessage.replace(/\*pause\*/g, ''));
     }
-    
-    // Continue listening for response
+
+    // Continue listening for response with optimized settings
     twiml.gather({
       input: 'speech',
-      timeout: 10,
-      speechTimeout: 'auto',
+      timeout: 8,  // Match main gather timeout
+      speechTimeout: 3,  // Match main speechTimeout
       speechModel: 'experimental_utterances',
       enhanced: true,
       language: 'en-US',
       action: `/api/voice/process-speech?callId=${callId}`,
       method: 'POST',
-      bargeIn: true
+      bargeIn: true,
+      partialResultCallback: `/api/voice/partial-speech?callId=${callId}`,
+      partialResultCallbackMethod: 'POST'
     });
-    
+
     // If they still don't respond, try again
     twiml.redirect(`/api/voice/timeout?callId=${callId}`);
-    
+
   } catch (error) {
     console.error('Error in timeout handling:', error);
     twiml.say('I apologize, I am experiencing technical difficulties. Goodbye.');
     twiml.hangup();
   }
-  
+
   res.type('text/xml');
   res.send(twiml.toString());
 });
@@ -843,18 +822,48 @@ app.post('/api/voice/timeout', async (req, res) => {
 app.post('/api/voice/partial-speech', (req, res) => {
   const callId = req.query.callId;
   const partialSpeech = req.body.PartialSpeechResult || '';
-  
-  console.log(`🗣️ PARTIAL SPEECH for callId ${callId}: "${partialSpeech}"`);
-  
-  // Emit partial speech to frontend for real-time display
-  if (partialSpeech.length > 3) { // Only emit if there's meaningful partial speech
+  const stability = parseFloat(req.body.Stability) || 0;
+
+  console.log(`🗣️ PARTIAL SPEECH for callId ${callId}: "${partialSpeech}" (stability: ${stability})`);
+
+  // Detect interruption - if customer starts speaking with reasonable confidence
+  if (partialSpeech.length > 5 && stability > 0.3) {
+    const state = conversationStates.get(callId);
+
+    // Only emit interruption if AI is currently speaking
+    if (state && state.isAISpeaking) {
+      console.log(`⚠️ INTERRUPTION DETECTED for callId ${callId} - Customer speaking while AI is talking`);
+
+      // Mark AI as no longer speaking
+      state.isAISpeaking = false;
+      state.waitingForCustomer = true;
+      state.lastInterruption = new Date();
+
+      // Emit interruption event to stop AI playback
+      io.emit('customerInterruption', {
+        callId,
+        partialSpeech,
+        timestamp: new Date()
+      });
+
+      // Mark conversation as interrupted for context-aware response
+      const conversation = conversations.get(callId);
+      if (conversation) {
+        conversation.interrupted = true;
+      }
+    }
+  }
+
+  // Emit partial speech for real-time display
+  if (partialSpeech.length > 3) {
     io.emit('partialSpeechUpdate', {
       callId,
       partialSpeech,
+      stability,
       timestamp: new Date()
     });
   }
-  
+
   // Return empty TwiML to continue listening
   const twiml = new twilio.twiml.VoiceResponse();
   res.type('text/xml');
@@ -874,15 +883,15 @@ function logPerformance(service, operation, duration) {
     duration,
     timestamp: Date.now()
   });
-  
+
   // Keep only last 100 metrics
   if (performanceMetrics[service].length > 100) {
     performanceMetrics[service].shift();
   }
-  
+
   // Log performance metrics
   console.log(`⏱️ ${service.toUpperCase()} ${operation}: ${duration}ms`);
-  
+
   // Calculate and log average
   const avg = performanceMetrics[service].reduce((sum, metric) => sum + metric.duration, 0) / performanceMetrics[service].length;
   console.log(`📊 ${service.toUpperCase()} Average ${operation}: ${Math.round(avg)}ms`);
@@ -894,15 +903,15 @@ app.post('/api/voice/process-speech', async (req, res) => {
   try {
     const callId = req.query.callId;
     let userSpeech = req.body.SpeechResult || '';
-    
+
     if (azureIntegration) {
       userSpeech = await azureIntegration.processSpeechWithAzure(req.body);
     }
-    
+
     if (userSpeech) {
       const conversation = conversations.get(callId) || [];
       conversation.push({ role: 'user', content: userSpeech });
-      
+
       const aiResponse = await generateAIResponse(conversation, callId, activeCalls.get(callId));
       const ttsResult = await createTTSResponse(aiResponse, {
         rate: '0%',
@@ -910,10 +919,17 @@ app.post('/api/voice/process-speech', async (req, res) => {
         volume: 'medium',
         style: 'conversation'
       });
-      
+
       const twiml = new twilio.twiml.VoiceResponse();
-      twiml.play({ loop: 1 }, ttsResult.audioUrl);
-      
+
+      // Check if ttsResult exists and has audioUrl (Azure TTS)
+      if (ttsResult && ttsResult.audioUrl) {
+        twiml.play({ loop: 1 }, ttsResult.audioUrl);
+      } else {
+        // Fallback to Twilio TTS if Azure not available
+        twiml.say({ voice: 'alice' }, aiResponse);
+      }
+
       res.type('text/xml');
       res.send(twiml.toString());
       return;
@@ -921,7 +937,7 @@ app.post('/api/voice/process-speech', async (req, res) => {
   } catch (error) {
     console.error('Error in speech processing:', error);
   }
-  
+
   // Default response if something goes wrong
   const twiml = new twilio.twiml.VoiceResponse();
   twiml.say('I apologize, but I could not process that. Could you please repeat?');
@@ -933,14 +949,14 @@ app.post('/api/voice/process-speech', async (req, res) => {
 app.post('/api/voice/status', (req, res) => {
   const callSid = req.body.CallSid;
   const callStatus = req.body.CallStatus;
-  
+
   console.log(`Call status update: ${callStatus} for SID: ${callSid}`);
-  
+
   // Find call by Twilio SID and update status
   for (const [callId, callData] of activeCalls.entries()) {
     if (callData.twilioCallSid === callSid) {
       callData.status = callStatus;
-      
+
       // Emit status update with correct event names for frontend
       io.emit('callStatus', {
         callId,
@@ -953,7 +969,7 @@ app.post('/api/voice/status', (req, res) => {
       if (callStatus === 'completed' || callStatus === 'failed') {
         // Get final order details before cleanup
         const orderInfo = orderDetails.get(callId);
-        
+
         // Save conversation history before cleanup
         const conversation = conversations.get(callId) || [];
         if (conversation.length > 0) {
@@ -962,12 +978,12 @@ app.post('/api/voice/status', (req, res) => {
             orderDetails: orderInfo
           });
         }
-        
-        io.emit('callCompleted', { 
+
+        io.emit('callCompleted', {
           callId,
-          orderInfo 
+          orderInfo
         });
-        
+
         setTimeout(() => {
           activeCalls.delete(callId);
           conversations.delete(callId);
@@ -977,14 +993,14 @@ app.post('/api/voice/status', (req, res) => {
       break;
     }
   }
-  
+
   res.status(200).send('OK');
 });
 
 // Manual call termination endpoint
 app.post('/api/terminate-call', async (req, res) => {
   const { callId } = req.body;
-  
+
   if (!callId) {
     return res.status(400).json({ error: 'Call ID is required' });
   }
@@ -993,7 +1009,7 @@ app.post('/api/terminate-call', async (req, res) => {
     // Get call data and order details
     const callData = activeCalls.get(callId);
     const order = orderDetails.get(callId);
-    
+
     if (!callData) {
       return res.status(404).json({ error: 'Call not found' });
     }
@@ -1042,29 +1058,29 @@ app.post('/api/terminate-call', async (req, res) => {
     cleanupSessionFlags(callId);
 
     // Emit call completed event
-    io.emit('callCompleted', { 
-      callId, 
+    io.emit('callCompleted', {
+      callId,
       reason: 'manual_termination',
       status: 'success'
     });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Call terminated successfully',
       callId
     });
 
   } catch (error) {
     console.error('Error in terminate-call endpoint:', error);
-    
+
     // Attempt cleanup even in case of error
     try {
       activeCalls.delete(callId);
       conversations.delete(callId);
       resetTimeoutAttempts(callId);
-      
-      io.emit('callCompleted', { 
-        callId, 
+
+      io.emit('callCompleted', {
+        callId,
         reason: 'manual_termination',
         status: 'error',
         error: error.message
@@ -1072,9 +1088,9 @@ app.post('/api/terminate-call', async (req, res) => {
     } catch (cleanupError) {
       console.error('Error during cleanup:', cleanupError);
     }
-    
-    res.status(500).json({ 
-      error: 'Failed to terminate call', 
+
+    res.status(500).json({
+      error: 'Failed to terminate call',
       details: error.message,
       callId
     });
@@ -1086,11 +1102,11 @@ app.get('/api/conversation/:callId', (req, res) => {
   const callId = req.params.callId;
   const conversation = conversations.get(callId);
   const order = orderDetails.get(callId);
-  
+
   if (conversation) {
     // Filter out system messages for display
     const displayConversation = conversation.filter(msg => msg.role !== 'system');
-    res.json({ 
+    res.json({
       conversation: displayConversation,
       orderDetails: order || null
     });
@@ -1103,7 +1119,7 @@ app.get('/api/conversation/:callId', (req, res) => {
 app.get('/api/order/:callId', (req, res) => {
   const callId = req.params.callId;
   const order = orderDetails.get(callId);
-  
+
   if (order) {
     res.json({ orderDetails: order });
   } else {
@@ -1149,33 +1165,33 @@ app.get('/api/azure/status', async (req, res) => {
 app.post('/api/azure/test-tts', async (req, res) => {
   try {
     const { text, options } = req.body;
-    
+
     if (!azureIntegration) {
       return res.status(500).json({ error: 'Azure integration not available' });
     }
-    
+
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
 
     const testText = text || 'Hello, this is a test of Azure Text-to-Speech with Luna voice.';
-    
+
     const ttsResult = await azureIntegration.createTTSResponse(testText, options || {});
-    
+
     res.json({
       success: true,
       message: 'TTS test successful',
       audioFileName: ttsResult.audioFileName,
       audioUrl: ttsResult.audioFileName ? `/audio/${ttsResult.audioFileName}` : null
     });
-    
+
     // Clean up test file after 60 seconds
     if (ttsResult.audioFileName) {
       setTimeout(() => {
         azureIntegration.cleanupTempAudio(ttsResult.audioFileName);
       }, 60000);
     }
-    
+
   } catch (error) {
     console.error('Azure TTS test failed:', error);
     res.status(500).json({
@@ -1191,7 +1207,7 @@ app.get('/api/azure/voices', async (req, res) => {
     if (!azureIntegration) {
       return res.status(500).json({ error: 'Azure integration not available' });
     }
-    
+
     try {
       const voices = await azureIntegration.azureSpeech.getAvailableVoices();
       res.json({
@@ -1215,7 +1231,7 @@ app.get('/api/azure/voices', async (req, res) => {
         note: 'Using configured voice (voice listing unavailable)'
       });
     }
-    
+
   } catch (error) {
     console.error('Failed to get Azure voices:', error);
     res.status(500).json({
@@ -1227,7 +1243,7 @@ app.get('/api/azure/voices', async (req, res) => {
 // Health check endpoint with Azure status
 app.get('/api/health', async (req, res) => {
   const healthStatus = {
-    status: 'OK', 
+    status: 'OK',
     timestamp: new Date(),
     services: {
       twilio: !!process.env.TWILIO_ACCOUNT_SID,
@@ -1259,7 +1275,7 @@ app.get('/api/twilio/status', async (req, res) => {
   try {
     // Get account info
     const account = await twilioClient.api.accounts(process.env.TWILIO_ACCOUNT_SID).fetch();
-    
+
     // Get verified phone numbers (for trial accounts)
     let verifiedNumbers = [];
     try {
@@ -1268,7 +1284,7 @@ app.get('/api/twilio/status', async (req, res) => {
         phoneNumber: callerId.phoneNumber,
         friendlyName: callerId.friendlyName
       }));
-      } catch (error) {
+    } catch (error) {
       console.log('Could not fetch verified numbers:', error.message);
     }
 
@@ -1280,11 +1296,11 @@ app.get('/api/twilio/status', async (req, res) => {
         phoneNumber: number.phoneNumber,
         friendlyName: number.friendlyName
       }));
-  } catch (error) {
+    } catch (error) {
       console.log('Could not fetch Twilio numbers:', error.message);
     }
-      
-      res.json({
+
+    res.json({
       account: {
         sid: account.sid,
         friendlyName: account.friendlyName,
@@ -1297,9 +1313,9 @@ app.get('/api/twilio/status', async (req, res) => {
     });
   } catch (error) {
     console.error('Error checking Twilio status:', error);
-      res.status(500).json({
-      error: 'Failed to check Twilio status', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Failed to check Twilio status',
+      details: error.message
     });
   }
 });
@@ -1312,7 +1328,7 @@ app.get('/api/conversation-history', (req, res) => {
       .map(file => {
         const filepath = path.join(conversationHistoryDir, file);
         const stats = fs.statSync(filepath);
-    return {
+        return {
           filename: file,
           size: stats.size,
           created: stats.birthtime,
@@ -1320,17 +1336,17 @@ app.get('/api/conversation-history', (req, res) => {
         };
       })
       .sort((a, b) => b.created - a.created); // Sort by newest first
-    
-    res.json({ 
+
+    res.json({
       files,
       totalFiles: files.length,
       directory: conversationHistoryDir
     });
   } catch (error) {
     console.error('❌ Error listing conversation history files:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to list conversation history files',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1340,17 +1356,17 @@ app.get('/api/conversation-history/:filename', (req, res) => {
   try {
     const filename = req.params.filename;
     const filepath = path.join(conversationHistoryDir, filename);
-    
+
     if (!fs.existsSync(filepath)) {
       return res.status(404).json({ error: 'File not found' });
     }
-    
+
     res.download(filepath, filename);
   } catch (error) {
     console.error('❌ Error downloading conversation history file:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to download conversation history file',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1360,42 +1376,66 @@ async function generateAIResponse(conversation, callId, hotel) {
   const startTime = Date.now();
   try {
     const lastMessage = conversation[conversation.length - 1]?.content || '';
+
+    // Check if conversation was interrupted - skip cache for fresh response
+    const wasInterrupted = conversation.interrupted;
+    delete conversation.interrupted; // Clear flag after checking
+
     const cacheKey = getCacheKey('openai', lastMessage);
-    
-    // Check cache
-    const cached = getFromCache(cacheKey);
-    if (cached) {
-      console.log('Using cached OpenAI response');
-      return cached;
+
+    // Check cache only if not interrupted
+    if (!wasInterrupted) {
+      const cached = getFromCache(cacheKey);
+      if (cached) {
+        console.log('✅ Using cached OpenAI response');
+        logPerformance('openai', 'chat_completion_cached', Date.now() - startTime);
+        return cached;
+      }
+    } else {
+      console.log('⚠️ Skipping cache due to interruption - generating fresh response');
     }
-    
+
     const completion = await openai.chat.completions.create({
       model: LIVE_CHAT_MODEL,
       messages: conversation,
       temperature: 0.5,  // Slightly reduced for better consistency while maintaining natural variation
-      max_tokens: 100    // Reduced from 150 as most responses don't need that many tokens
+      max_tokens: 80    // Reduced from 100 for faster response generation
     });
 
     const response = completion.choices[0].message.content;
-    addToCache(cacheKey, response);
+    const duration = Date.now() - startTime;
+
+    console.log(`⏱️ AI Response generated in ${duration}ms`);
+    logPerformance('openai', 'chat_completion', duration);
+
+    // Cache response only if not interrupted
+    if (!wasInterrupted) {
+      addToCache(cacheKey, response);
+    }
+
     return response;
   } catch (error) {
-    console.error('Error generating AI response:', error);
-    return "I apologize, but I'm having trouble processing your request right now. Could you please repeat that?";
+    console.error('❌ Error generating AI response:', error);
+    return "I apologize, could you please repeat that?";
   }
 }
 
 // Modify the TTS response generation
 async function createTTSResponse(text, options = {}) {
+  // If Azure integration is not available, return null to use Twilio TTS
+  if (!azureIntegration) {
+    return null;
+  }
+
   const cacheKey = getCacheKey('tts', text, options);
-  
+
   // Check cache
   const cached = getFromCache(cacheKey);
   if (cached) {
     console.log('Using cached TTS response');
     return cached;
   }
-  
+
   const ttsResult = await azureIntegration.createTTSResponse(text, options);
   addToCache(cacheKey, ttsResult);
   return ttsResult;
@@ -1405,7 +1445,7 @@ async function createTTSResponse(text, options = {}) {
 app.post('/api/analyze-call', async (req, res) => {
   try {
     const { prompt, callId } = req.body;
-    
+
     console.log(`🔍 Analyzing call ${callId} with AI...`);
 
     const completion = await openai.chat.completions.create({
@@ -1426,7 +1466,7 @@ app.post('/api/analyze-call', async (req, res) => {
 
     const analysisText = completion.choices[0].message.content;
     console.log(`🤖 Raw AI analysis: ${analysisText}`);
-    
+
     // Parse the JSON response
     let analysis;
     try {
@@ -1467,23 +1507,23 @@ app.post('/api/analyze-call', async (req, res) => {
         }
       };
     }
-    
+
     console.log(`✅ Call analysis completed for ${callId}`);
-    
+
     // Save conversation history with analysis
     const conversation = conversations.get(callId) || [];
     const callData = activeCalls.get(callId);
     if (conversation.length > 0) {
       saveConversationHistory(callId, conversation, callData, analysis);
     }
-    
+
     res.json({ analysis });
-    
+
   } catch (error) {
     console.error('❌ Error analyzing call:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to analyze call',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -1491,13 +1531,13 @@ app.post('/api/analyze-call', async (req, res) => {
 // Clean up when call ends
 app.post('/api/voice/call-ended', (req, res) => {
   const callId = req.query.callId;
-  
+
   // Clean up all call-related data
   conversations.delete(callId);
   activeCalls.delete(callId);
   resetTimeoutAttempts(callId);
   cleanupSessionFlags(callId);
-  
+
   res.sendStatus(200);
 });
 
@@ -1577,6 +1617,53 @@ app.post('/api/test/latency', async (req, res) => {
     console.error('Error in latency test:', error);
     res.status(500).json({
       error: 'Latency test failed',
+      details: error.message
+    });
+  }
+});
+
+// API endpoint to initiate calls from website
+app.post('/api/voice/initiate-call', async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({ error: 'Phone number is required' });
+    }
+
+    console.log(`📞 Website demo call requested for: ${phoneNumber}`);
+
+    const twilioNumber = process.env.TWILIO_PHONE_NUMBER;
+    const ngrokUrl = process.env.NGROK_URL || `http://localhost:${PORT}`;
+
+    // Make the call using Twilio
+    const call = await twilioClient.calls.create({
+      url: `${ngrokUrl}/api/voice/incoming`,
+      to: phoneNumber,
+      from: twilioNumber,
+      method: 'POST'
+    });
+
+    console.log(`✅ Call initiated successfully! Call SID: ${call.sid}`);
+
+    res.json({
+      success: true,
+      callSid: call.sid,
+      message: 'Call initiated successfully! Your phone will ring in a few seconds.'
+    });
+
+  } catch (error) {
+    console.error('❌ Error initiating call:', error.message);
+
+    let errorMessage = 'Failed to initiate call';
+    if (error.message.includes('unverified')) {
+      errorMessage = 'This number needs to be verified in your Twilio account first.';
+    } else if (error.message.includes('balance')) {
+      errorMessage = 'Insufficient Twilio account balance.';
+    }
+
+    res.status(500).json({
+      error: errorMessage,
       details: error.message
     });
   }

@@ -4,159 +4,446 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Voice Agent | Future of Sales</title>
-    <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap"
-        rel="stylesheet">
-    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
-    <link rel="stylesheet" href="./css/style.css">
-    <script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
+    <title>Arraylink AI | Voice Powered Sales Agents</title>
+    <meta name="description"
+        content="Voice Powered AI sales agents that call your customers, suggest what they need, and place the order—no screens, no apps, just real conversations.">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1b2a;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Navigation ── */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.2rem 3rem;
+            background: #0d1b2a;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 700;
+            font-size: 1.15rem;
+            letter-spacing: -0.01em;
+            text-decoration: none;
+            color: #fff;
+        }
+
+        .nav-logo svg {
+            width: 28px;
+            height: 28px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-right a {
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .nav-right a:hover {
+            color: #fff;
+        }
+
+        /* ── Hero Section ── */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 7rem 2rem 4rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Subtle radial glow behind headline */
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 700px;
+            height: 400px;
+            background: radial-gradient(ellipse, rgba(30, 80, 180, 0.18) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 780px;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 700;
+            line-height: 1.1;
+            letter-spacing: -0.02em;
+            margin-bottom: 1.5rem;
+            color: #d4e4f7;
+        }
+
+        .hero h1 .word-remind {
+            color: #c8dff5;
+        }
+
+        .hero h1 .word-reorder {
+            color: #9bbfe0;
+        }
+
+        .hero h1 .word-restock {
+            color: #5a9fd4;
+        }
+
+        .hero h1 .dot {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        .hero-subtitle {
+            font-size: 1.1rem;
+            color: rgba(255, 255, 255, 0.6);
+            line-height: 1.7;
+            max-width: 560px;
+            margin: 0 auto 2.5rem;
+            font-weight: 400;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-outline {
+            padding: 12px 26px;
+            background: transparent;
+            border: 1.5px solid rgba(255, 255, 255, 0.35);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.25s ease;
+        }
+
+        .btn-outline:hover {
+            border-color: rgba(255, 255, 255, 0.7);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-blue {
+            padding: 12px 26px;
+            background: #2563eb;
+            border: 1.5px solid #2563eb;
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.25s ease;
+        }
+
+        .btn-blue:hover {
+            background: #1d4ed8;
+            border-color: #1d4ed8;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(37, 99, 235, 0.4);
+        }
+
+        /* Play icon */
+        .play-icon {
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .play-icon::after {
+            content: '';
+            display: block;
+            width: 0;
+            height: 0;
+            border-style: solid;
+            border-width: 4px 0 4px 7px;
+            border-color: transparent transparent transparent #2563eb;
+            margin-left: 1px;
+        }
+
+        /* ── Network Visualization (bottom right) ── */
+        .network-visual {
+            position: fixed;
+            bottom: -60px;
+            right: -60px;
+            width: 380px;
+            height: 380px;
+            opacity: 0.35;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .network-visual canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ── Features Section ── */
+        .features {
+            position: relative;
+            z-index: 1;
+            padding: 5rem 3rem;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .features h2 {
+            text-align: center;
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 3rem;
+            color: #d4e4f7;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
+            padding: 2rem;
+            transition: border-color 0.3s, transform 0.3s;
+        }
+
+        .feature-card:hover {
+            border-color: rgba(37, 99, 235, 0.4);
+            transform: translateY(-4px);
+        }
+
+        .feature-card .icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.6rem;
+            color: #e2edf8;
+        }
+
+        .feature-card p {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.55);
+            line-height: 1.6;
+        }
+
+        /* ── Footer ── */
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 0.85rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            nav {
+                padding: 1rem 1.5rem;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .features {
+                padding: 4rem 1.5rem;
+            }
+        }
+    </style>
 </head>
 
 <body>
-    <!-- Background Canvas for Particles -->
-    <canvas id="neural-network-canvas"></canvas>
-
-    <!-- Scanline Effect -->
-    <div class="scanlines"></div>
 
     <!-- Navigation -->
-    <nav class="navbar">
-        <div class="container nav-container">
-            <a href="#" class="logo">
-                <div class="logo-icon">
-                    <span class="material-icons-round">graphic_eq</span>
-                </div>
-                VOICE<span class="text-neon">AGENT</span>.ai
-            </a>
-            <div class="nav-status">
-                <span class="status-dot"></span>
-                SYSTEM ONLINE
-            </div>
-            <a href="portal.html" class="btn btn-cyber">
-                <span class="btn-text">ACCESS PORTAL</span>
-                <span class="btn-glitch">ACCESS PORTAL</span>
-            </a>
+    <nav>
+        <a href="/" class="nav-logo">
+            <!-- Arraylink triangle logo -->
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <polygon points="16,3 30,28 2,28" stroke="#ffffff" stroke-width="2.5" fill="none" />
+                <line x1="16" y1="3" x2="16" y2="28" stroke="#ffffff" stroke-width="1.5" opacity="0.5" />
+            </svg>
+            Arraylink AI
+        </a>
+        <div class="nav-right">
+            <a href="#" id="greetings-link">Greetings</a>
         </div>
     </nav>
 
-    <!-- Hero Section -->
-    <header class="hero">
-        <div class="container hero-grid">
-            <div class="hero-content">
-                <div class="badge-tech">
-                    <span class="material-icons-round">bolt</span>
-                    POWERED BY GPT-4o & SAP
-                </div>
-                <h1 class="glitch-text" data-text="AUTONOMOUS_SALES">
-                    AUTONOMOUS <br>
-                    <span class="text-neon">SALES AGENT</span>
-                </h1>
-                <p class="hero-desc">
-                    Deploy an AI workforce that negotiates, checks inventory, and closes deals in real-time.
-                    Fully integrated with your ERP.
-                </p>
-
-                <div class="ctl-panel">
-                    <div class="stat-box">
-                        <span class="label">VOICE LATENCY</span>
-                        <span class="value text-neon">240ms</span>
-                    </div>
-                    <div class="stat-box">
-                        <span class="label">SAP STATUS</span>
-                        <span class="value text-success">CONNECTED</span>
-                    </div>
-                </div>
-
-                <div class="cta-group">
-                    <a href="#" class="btn btn-primary-glow">
-                        START DEMO
-                        <span class="material-icons-round">arrow_forward</span>
-                    </a>
-                    <a href="#features" class="btn btn-glass">
-                        VIEW ARCHITECTURE
-                    </a>
-                </div>
-            </div>
-
-            <!-- AI Visual Core -->
-            <div class="hero-visual">
-                <div class="ai-core-container">
-                    <div class="ai-core">
-                        <div class="core-ring ring-1"></div>
-                        <div class="core-ring ring-2"></div>
-                        <div class="core-ring ring-3"></div>
-                        <div class="core-center">
-                            <span class="material-icons-round">mic</span>
-                        </div>
-                    </div>
-                    <div class="floating-card card-1">
-                        <div class="card-header">
-                            <span class="material-icons-round">inventory_2</span>
-                            <span>INVENTORY CHECK</span>
-                        </div>
-                        <div class="card-body">
-                            Product: <span class="text-neon">Organic Avocados</span><br>
-                            Stock: <span class="text-success">450 Units</span><br>
-                            Warehouse: <span class="text-warning">CA-05</span>
-                        </div>
-                    </div>
-                    <div class="floating-card card-2">
-                        <div class="card-header">
-                            <span class="material-icons-round">shopping_cart</span>
-                            <span>ORDER CREATED</span>
-                        </div>
-                        <div class="card-body">
-                            Order #: <span class="text-neon">SAP-9921</span><br>
-                            Value: <span class="text-success">$1,240.00</span>
-                        </div>
-                    </div>
-                </div>
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>
+                <span class="word-remind">Remind</span><span class="dot">.</span>&nbsp;
+                <span class="word-reorder">Reorder</span><span class="dot">.</span>&nbsp;
+                <span class="word-restock">Restock</span><span class="dot">.</span>
+            </h1>
+            <p class="hero-subtitle">
+                Voice Powered AI sales agents that call your customers, suggest what they
+                need, and place the order—no screens, no apps, just real conversations.
+            </p>
+            <div class="hero-buttons">
+                <a href="mailto:hello@arraylink.ai" class="btn-outline">
+                    Talk to our team &nbsp;→
+                </a>
+                <a href="portal.html" class="btn-blue" id="try-demo-btn">
+                    <span class="play-icon"></span>
+                    Try Live Demo
+                </a>
             </div>
         </div>
-    </header>
 
-    <!-- Features Section -->
-    <section id="features" class="features-section">
-        <div class="container">
-            <div class="section-header">
-                <h2 class="section-title">NEURAL CAPABILITIES</h2>
-                <div class="separator-neon"></div>
+        <!-- Animated dot network (bottom-right decoration) -->
+        <canvas id="networkCanvas" class="network-visual"
+            style="position:fixed;bottom:0;right:0;width:340px;height:340px;opacity:0.3;pointer-events:none;z-index:0;"></canvas>
+    </section>
+
+    <!-- Features -->
+    <section class="features" id="features">
+        <h2>Why Arraylink AI?</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="icon">📞</div>
+                <h3>Autonomous Calls</h3>
+                <p>AI agents call your customers automatically, hold natural conversations, and close orders without
+                    human intervention.</p>
             </div>
-
-            <div class="bento-grid">
-                <!-- Card 1 -->
-                <div class="bento-item glow-card">
-                    <div class="item-icon icon-sap">
-                        <span class="material-icons-round">dns</span>
-                    </div>
-                    <h3>SAP Integration</h3>
-                    <p>Direct hook into S/4HANA for real-time inventory and pricing lookup.</p>
-                </div>
-
-                <!-- Card 2 -->
-                <div class="bento-item glow-card">
-                    <div class="item-icon icon-brain">
-                        <span class="material-icons-round">psychology</span>
-                    </div>
-                    <h3>Context Memory</h3>
-                    <p>Remembers past orders and customer preferences for hyper-personalized calls.</p>
-                </div>
-
-                <!-- Card 3 -->
-                <div class="bento-item glow-card">
-                    <div class="item-icon icon-voice">
-                        <span class="material-icons-round">record_voice_over</span>
-                    </div>
-                    <h3>Human-Like Voice</h3>
-                    <p>Sub-second latency with emotional prosody and interruption handling.</p>
-                </div>
+            <div class="feature-card">
+                <div class="icon">🧠</div>
+                <h3>Intelligent Reordering</h3>
+                <p>Remembers customer history, suggests the right products at the right time, and handles upsells
+                    naturally.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon">⚡</div>
+                <h3>Instant Setup</h3>
+                <p>No apps, no screens for your customers. They just receive a call and talk — orders are placed in
+                    real-time.</p>
             </div>
         </div>
     </section>
 
-    <!-- Script -->
-    <script src="./js/app.js"></script>
+    <footer>
+        &copy; 2025 Arraylink AI. All rights reserved.
+    </footer>
+
+    <script>
+        // Animated dot network canvas
+        const canvas = document.getElementById('networkCanvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 340;
+        canvas.height = 340;
+
+        const dots = [];
+        for (let i = 0; i < 28; i++) {
+            dots.push({
+                x: Math.random() * 340,
+                y: Math.random() * 340,
+                vx: (Math.random() - 0.5) * 0.4,
+                vy: (Math.random() - 0.5) * 0.4,
+                r: Math.random() * 2.5 + 1
+            });
+        }
+
+        function drawNetwork() {
+            ctx.clearRect(0, 0, 340, 340);
+            // Draw connections
+            for (let i = 0; i < dots.length; i++) {
+                for (let j = i + 1; j < dots.length; j++) {
+                    const dx = dots[i].x - dots[j].x;
+                    const dy = dots[i].y - dots[j].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < 90) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(100, 180, 255, ${1 - dist / 90})`;
+                        ctx.lineWidth = 0.6;
+                        ctx.moveTo(dots[i].x, dots[i].y);
+                        ctx.lineTo(dots[j].x, dots[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            // Draw dots
+            dots.forEach(d => {
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(120, 190, 255, 0.85)';
+                ctx.fill();
+                // Move
+                d.x += d.vx;
+                d.y += d.vy;
+                if (d.x < 0 || d.x > 340) d.vx *= -1;
+                if (d.y < 0 || d.y > 340) d.vy *= -1;
+            });
+            requestAnimationFrame(drawNetwork);
+        }
+        drawNetwork();
+    </script>
+
 </body>
 
 </html>
